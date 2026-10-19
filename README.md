@@ -1,10 +1,12 @@
 # MalVisor
 
-MalVisor is a planned offline, static, evidence-first environment for learning how Windows Portable Executable (PE) structures support, or fail to support, an interpretation. It aims to show **what was observed, where the evidence lives, why an inference was made, and what remains unknown**. It is not a replacement for Ghidra, radare2, or capa.
+MalVisor is an offline, static, evidence-first environment for learning how Windows Portable Executable (PE) structures support, or fail to support, an interpretation. It aims to show **what was observed, where the evidence lives, why an inference was made, and what remains unknown**. It is not a replacement for Ghidra, radare2, or capa.
 
-## Current status: Phase 1A–1C
+## Current status: Phase 2A
 
 MalVisor now parses PE32/x86 and PE32+/x86-64 EXE or DLL structure from local bytes using `pefile`. It records typed structural facts, bounded byte evidence, and observations in a deterministic JSON report. Optional LIEF comparison is explicit opt-in. The software does **not** disassemble code, execute samples, classify malware, or infer runtime behavior from imports.
+
+The Phase 2A browser viewer opens these JSON reports locally. It shows a raw-offset PE layout, selected structure fields, and the artifact → evidence → observation trail. [Frontend instructions](frontend/README.md) cover setup, import, offline use, address spaces, and limitations. The CLI never starts from the browser.
 
 The architecture follows [Research Report 2](Research_Report/research-report2.md). [Research Report 1](Research_Report/research-report1.md) provides earlier safety and terminology context. Both are research/planning documents, not evidence that novelty claims were validated.
 
