@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from malvisor.core.exceptions import ContractError
-from malvisor.core.models import Artifact, Disagreement, Evidence, Inference, Limitation, Observation
+from malvisor.core.models import Artifact, Disagreement, Evidence, Inference, Limitation, Observation, StructuralFact
 
 
 def validate_references(
@@ -14,12 +14,14 @@ def validate_references(
     inferences: Iterable[Inference],
     disagreements: Iterable[Disagreement],
     limitations: Iterable[Limitation],
+    pe_facts: Iterable[StructuralFact] = (),
 ) -> None:
     evidence = tuple(evidence)
     observations = tuple(observations)
     inferences = tuple(inferences)
     disagreements = tuple(disagreements)
     limitations = tuple(limitations)
+    pe_facts = tuple(pe_facts)
     entities = (artifact, *evidence, *observations, *inferences, *disagreements, *limitations)
     ids = [entity.id for entity in entities]
     if len(ids) != len(set(ids)):
@@ -29,6 +31,12 @@ def validate_references(
     for item in evidence:
         if item.artifact_id != artifact.id:
             raise ContractError(f"evidence {item.id} refers to an unknown artifact")
+        if item.verification_status.value == "verified":
+            location = item.location
+            if location.byte_range is not None and location.byte_range[1] > artifact.size:
+                raise ContractError(f"verified evidence {item.id} exceeds artifact size")
+            if location.file_offset is not None and location.file_offset >= artifact.size:
+                raise ContractError(f"verified evidence {item.id} has an invalid file offset")
     for item in observations:
         if not set(item.evidence_ids) <= evidence_ids:
             raise ContractError(f"observation {item.id} has dangling evidence references")
@@ -41,6 +49,12 @@ def validate_references(
     for item in limitations:
         if item.subject_id is not None and item.subject_id not in ids:
             raise ContractError(f"limitation {item.id} has a dangling subject reference")
+    paths = [item.path for item in pe_facts]
+    if len(paths) != len(set(paths)):
+        raise ContractError("structural fact paths must be unique")
+    for item in pe_facts:
+        if item.evidence_id not in evidence_ids:
+            raise ContractError(f"structural fact {item.path} has dangling evidence reference")
 
 
 def validate_payload_references(payload: dict[str, Any]) -> None:
@@ -61,6 +75,11 @@ def validate_payload_references(payload: dict[str, Any]) -> None:
         has_location = any(value is not None for value in location.values())
         if item["verification_status"] == "verified" and not has_location:
             raise ContractError(f"verified evidence {item['id']} has no location")
+        if item["verification_status"] == "verified":
+            if location["byte_range"] is not None and location["byte_range"][1] > artifact["size"]:
+                raise ContractError(f"verified evidence {item['id']} exceeds artifact size")
+            if location["file_offset"] is not None and location["file_offset"] >= artifact["size"]:
+                raise ContractError(f"verified evidence {item['id']} has an invalid file offset")
         if item["verification_status"] == "unresolved" and has_location:
             raise ContractError(f"unresolved evidence {item['id']} claims a location")
         for name in ("byte_range", "instruction_range"):
@@ -83,4 +102,11 @@ def validate_payload_references(payload: dict[str, Any]) -> None:
     for item in payload["limitations"]:
         if item["subject_id"] is not None and item["subject_id"] not in ids:
             raise ContractError(f"limitation {item['id']} has a dangling subject reference")
+    if "pe_facts" in payload:
+        paths = [item["path"] for item in payload["pe_facts"]]
+        if len(paths) != len(set(paths)):
+            raise ContractError("structural fact paths must be unique")
+        for item in payload["pe_facts"]:
+            if item["evidence_id"] not in evidence_ids:
+                raise ContractError(f"structural fact {item['path']} has dangling evidence reference")
 

@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "malvisor"
-version = "0.1.0"
+version = "0.2.0"
 description = "Static, evidence-first PE analysis foundation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-dependencies = []
+dependencies = ["pefile>=2024.8.26,<2027"]
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10", "jsonschema>=4.20,<5"]
+compare = ["lief>=0.17,<0.19"]
 
 [project.scripts]
 malvisor = "malvisor.cli.main:main"

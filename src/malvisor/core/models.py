@@ -1,6 +1,7 @@
 """Immutable, explicitly validated report entities."""
 
 from dataclasses import dataclass, field
+import math
 import re
 
 from malvisor.core.exceptions import ContractError
@@ -89,6 +90,7 @@ class Evidence:
     method: str
     verification_status: VerificationStatus
     location: Location = field(default_factory=Location)
+    excerpt_hex: str | None = None
 
     def __post_init__(self) -> None:
         _id(self.id)
@@ -103,6 +105,29 @@ class Evidence:
             raise ContractError("verified evidence requires a resolved location")
         if self.verification_status is VerificationStatus.UNRESOLVED and self.location.has_location():
             raise ContractError("unresolved evidence cannot claim a location")
+        if self.excerpt_hex is not None and (not re.fullmatch(r"(?:[0-9a-f]{2}){1,32}", self.excerpt_hex)):
+            raise ContractError("excerpt_hex must contain 1..32 bytes of lowercase hex")
+
+
+@dataclass(frozen=True)
+class StructuralFact:
+    path: str
+    value: str | int | float | bool | None
+    evidence_id: str
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[a-z][a-z0-9_.]*", self.path):
+            raise ContractError("invalid structural fact path")
+        if self.value is not None and type(self.value) not in (str, int, float, bool):
+            raise ContractError("invalid structural fact value")
+        if type(self.value) is float and not math.isfinite(self.value):
+            raise ContractError("structural fact float must be finite")
+        if isinstance(self.value, str) and len(self.value) > 1024:
+            raise ContractError("structural fact string is too long")
+        _id(self.evidence_id)
+        if self.note is not None:
+            _string(self.note, "note")
 
 
 @dataclass(frozen=True)
@@ -148,6 +173,11 @@ class Disagreement:
     description: str
     parser_names: tuple[str, ...]
     evidence_ids: tuple[str, ...] = ()
+    field_path: str | None = None
+    value_a: str | int | float | bool | None = None
+    value_b: str | int | float | bool | None = None
+    verification_status: VerificationStatus = VerificationStatus.UNRESOLVED
+    limitations: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _id(self.id)
@@ -159,6 +189,20 @@ class Disagreement:
         for name in self.parser_names:
             _string(name, "parser name")
         _refs(self.evidence_ids, "evidence_ids")
+        if self.field_path is not None:
+            _string(self.field_path, "field_path")
+        for name in ("value_a", "value_b"):
+            value = getattr(self, name)
+            if value is not None and type(value) not in (str, int, float, bool):
+                raise ContractError(f"invalid {name}")
+            if type(value) is float and not math.isfinite(value):
+                raise ContractError(f"nonfinite {name}")
+        if not isinstance(self.verification_status, VerificationStatus):
+            raise ContractError("invalid disagreement verification status")
+        if not isinstance(self.limitations, tuple):
+            raise ContractError("limitations must be a tuple")
+        for item in self.limitations:
+            _string(item, "disagreement limitation")
 
 
 @dataclass(frozen=True)

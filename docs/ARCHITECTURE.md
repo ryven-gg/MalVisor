@@ -1,13 +1,14 @@
 # Architecture
 
-Phase 0 contains four boundaries:
+Current implementation has five boundaries:
 
-1. `cli` exposes version/help and an unsupported `analyze` command.
-2. `parsers.base` defines a future adapter signature, without a parser implementation.
-3. `core.models`, `core.evidence`, and `core.reproducibility` define entities, provenance checks, and canonical JSON rules.
-4. `reporting.json_report` assembles and serializes a validated report.
+1. `cli` reads authorized regular files with size and file-type checks; it writes a new output only after successful analysis.
+2. `parsers.pefile_parser` extracts bounded PE fields from bytes. `parsers.locations` maps RVA/VA conservatively, including virtual-only and ambiguous results. `parsers.limits` is the resource budget.
+3. `parsers.report_builder` binds facts to byte ranges, evidence, and observations.
+4. `core.models`, `core.evidence`, and `reporting.json_report` validate and serialize the report.
+5. `parsers.lief_parser` and `differential.compare` optionally normalize and compare a second interpretation.
 
-The future flow is authorized input → bounded static parser → normalized observations/evidence → inference/differential analysis → validated report → offline viewer. Only the report contract exists today. A parser adapter must report its actual name/version if and only if used; an empty `parser_versions` object means none ran. The package does not import `pefile`, LIEF, or Capstone.
+The flow is authorized input → bounded static parser → verified locations and structural facts → validated canonical JSON. Comparison adds an explicitly requested LIEF pass and normalized field comparison. `parser_versions` lists only parsers that ran. `pefile` is required; LIEF is optional; Capstone and UI dependencies are absent.
 
-The research documents mention more advanced parsing and UI features. Those are plans, not current capabilities. The latest architectural priorities come from `Research_Report/research-report2.md`.
+The Phase 0 `ParserAdapter` placeholder now describes the common `bytes + Limits → ParsedPE` function shape; both parser functions use it. No inference engine exists, so `inferences` is empty for actual PE reports. A parser failure is a controlled error and does not produce a fabricated report. The latest architectural priorities come from `Research_Report/research-report2.md`.
 

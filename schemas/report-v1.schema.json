@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "input_sha256", "engine_version", "parser_versions", "analysis_config", "artifact", "observations", "evidence", "inferences", "disagreements", "limitations", "warnings", "errors"],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
     "input_sha256": {"$ref": "#/$defs/sha256"},
     "engine_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
     "parser_versions": {"type": "object", "propertyNames": {"type": "string", "minLength": 1}, "additionalProperties": {"type": "string", "minLength": 1}},
@@ -18,8 +18,22 @@
     "disagreements": {"type": "array", "items": {"$ref": "#/$defs/disagreement"}},
     "limitations": {"type": "array", "items": {"$ref": "#/$defs/limitation"}},
     "warnings": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
-    "errors": {"type": "array", "items": {"$ref": "#/$defs/issue"}}
+    "errors": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
+    "pe_facts": {"type": "array", "items": {"$ref": "#/$defs/structural_fact"}},
+    "comparison": {
+      "type": "object", "additionalProperties": false,
+      "required": ["parser_a", "parser_b", "equivalent_count", "disagreement_count"],
+      "properties": {
+        "parser_a": {"$ref": "#/$defs/text"}, "parser_b": {"$ref": "#/$defs/text"},
+        "equivalent_count": {"type": "integer", "minimum": 0},
+        "disagreement_count": {"type": "integer", "minimum": 0}
+      }
+    }
   },
+  "allOf": [
+    {"if": {"properties": {"schema_version": {"const": "1.1.0"}}}, "then": {"required": ["pe_facts"]}},
+    {"if": {"properties": {"schema_version": {"const": "1.0.0"}}}, "then": {"not": {"required": ["pe_facts"]}}}
+  ],
   "$defs": {
     "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -55,7 +69,18 @@
         "id": {"$ref": "#/$defs/id"}, "artifact_id": {"$ref": "#/$defs/id"},
         "source": {"$ref": "#/$defs/text"}, "method": {"$ref": "#/$defs/text"},
         "verification_status": {"enum": ["verified", "pending", "unresolved"]},
-        "location": {"$ref": "#/$defs/location"}
+        "location": {"$ref": "#/$defs/location"},
+        "excerpt_hex": {"type": ["string", "null"], "pattern": "^(?:[0-9a-f]{2}){1,32}$"}
+      }
+    },
+    "structural_fact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "value", "evidence_id", "note"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[a-z][a-z0-9_.]*$"},
+        "value": {"type": ["string", "integer", "number", "boolean", "null"]},
+        "evidence_id": {"$ref": "#/$defs/id"},
+        "note": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "null"}]}
       }
     },
     "observation": {
@@ -86,7 +111,12 @@
         "category": {"enum": ["equivalent", "semantic_difference", "unsupported", "malformed_input", "suspected_parser_defect"]},
         "description": {"$ref": "#/$defs/text"},
         "parser_names": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
-        "evidence_ids": {"$ref": "#/$defs/ids"}
+        "evidence_ids": {"$ref": "#/$defs/ids"},
+        "field_path": {"type": ["string", "null"]},
+        "value_a": {"type": ["string", "integer", "number", "boolean", "null"]},
+        "value_b": {"type": ["string", "integer", "number", "boolean", "null"]},
+        "verification_status": {"enum": ["verified", "pending", "unresolved"]},
+        "limitations": {"type": "array", "items": {"$ref": "#/$defs/text"}}
       }
     },
     "limitation": {

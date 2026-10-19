@@ -1,6 +1,6 @@
 # Contributing
 
-Use Python 3.11+, create a virtual environment, install `.[test]`, and run `python -m pytest`. Keep runtime dependencies minimal and record any new dependency and license.
+Use Python 3.11+, create a virtual environment, install `.[test]`, and run `python -m pytest`. Install `.[compare]` only for optional LIEF integration tests. `pefile` is the primary runtime dependency. Keep runtime dependencies minimal and record any new dependency and license.
 
 All analysis must remain static and offline. Never execute, instrument, unpack, download, or upload a sample as part of this project. Tests should use synthetic nonfunctional data or benign artifacts with documented redistribution rights. Do not commit malware binaries, large datasets, private paths, or secrets.
 

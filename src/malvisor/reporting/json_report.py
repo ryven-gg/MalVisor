@@ -9,7 +9,7 @@ from malvisor.core.evidence import validate_references
 from malvisor.core.exceptions import ContractError
 from malvisor.core.models import (
     SCHEMA_VERSION, Artifact, Disagreement, Evidence, Inference, Issue,
-    Limitation, Observation,
+    Limitation, Observation, StructuralFact,
 )
 from malvisor.core.reproducibility import canonical_json
 
@@ -28,12 +28,27 @@ class Report:
     parser_versions: dict[str, str] = field(default_factory=dict)
     schema_version: str = SCHEMA_VERSION
     engine_version: str = __version__
+    pe_facts: tuple[StructuralFact, ...] = ()
+    comparison: dict[str, str | int] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.artifact, Artifact):
             raise ContractError("artifact must be an Artifact")
-        if self.schema_version != SCHEMA_VERSION:
+        if self.schema_version not in (SCHEMA_VERSION, "1.1.0"):
             raise ContractError(f"unsupported schema version: {self.schema_version}")
+        if self.pe_facts and self.schema_version != "1.1.0":
+            raise ContractError("PE facts require schema version 1.1.0")
+        if self.comparison is not None and self.schema_version != "1.1.0":
+            raise ContractError("comparison requires schema version 1.1.0")
+        if self.comparison is not None and (
+            set(self.comparison) != {"parser_a", "parser_b", "equivalent_count", "disagreement_count"}
+            or any(not isinstance(self.comparison[key], str) or not self.comparison[key]
+                   for key in ("parser_a", "parser_b"))
+            or any(type(self.comparison[key]) is not int or self.comparison[key] < 0
+                   for key in ("equivalent_count", "disagreement_count"))
+            or self.comparison["disagreement_count"] != len(self.disagreements)
+        ):
+            raise ContractError("invalid comparison summary")
         if not isinstance(self.engine_version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", self.engine_version):
             raise ContractError("engine_version must be a semantic version")
         if not isinstance(self.parser_versions, dict) or any(
@@ -49,11 +64,11 @@ class Report:
             raise ContractError("analysis_config must contain named scalar values")
         if any(not isinstance(value, tuple) for value in (
             self.evidence, self.observations, self.inferences, self.disagreements,
-            self.limitations, self.warnings, self.errors,
+            self.limitations, self.warnings, self.errors, self.pe_facts,
         )):
             raise ContractError("report collections must be tuples")
         validate_references(self.artifact, self.evidence, self.observations,
-                            self.inferences, self.disagreements, self.limitations)
+                            self.inferences, self.disagreements, self.limitations, self.pe_facts)
         for collection, kind in ((self.warnings, Issue), (self.errors, Issue)):
             if any(not isinstance(item, kind) for item in collection):
                 raise ContractError("warnings and errors must contain Issue objects")
@@ -62,11 +77,11 @@ class Report:
     def to_dict(self) -> dict[str, Any]:
         """Build the canonical payload; entity lists are sorted by stable ID."""
         validate_references(self.artifact, self.evidence, self.observations,
-                            self.inferences, self.disagreements, self.limitations)
+                            self.inferences, self.disagreements, self.limitations, self.pe_facts)
         def sorted_entities(items: tuple[Any, ...]) -> list[dict[str, Any]]:
             return [_json_value(asdict(item)) for item in sorted(items, key=lambda item: item.id)]
 
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "input_sha256": self.artifact.sha256,
             "engine_version": self.engine_version,
@@ -81,6 +96,13 @@ class Report:
             "warnings": [_json_value(asdict(item)) for item in sorted(self.warnings, key=lambda item: (item.code, item.message))],
             "errors": [_json_value(asdict(item)) for item in sorted(self.errors, key=lambda item: (item.code, item.message))],
         }
+        if self.schema_version == "1.1.0":
+            payload["pe_facts"] = [
+                _json_value(asdict(item)) for item in sorted(self.pe_facts, key=lambda item: item.path)
+            ]
+            if self.comparison is not None:
+                payload["comparison"] = dict(self.comparison)
+        return payload
 
     def to_json(self) -> str:
         return canonical_json(self.to_dict())
