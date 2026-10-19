@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:malvisor:report-v1",
+  "title": "MalVisor report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "input_sha256", "engine_version", "parser_versions", "analysis_config", "artifact", "observations", "evidence", "inferences", "disagreements", "limitations", "warnings", "errors"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "input_sha256": {"$ref": "#/$defs/sha256"},
+    "engine_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "parser_versions": {"type": "object", "propertyNames": {"type": "string", "minLength": 1}, "additionalProperties": {"type": "string", "minLength": 1}},
+    "analysis_config": {"type": "object", "required": ["static_only"], "properties": {"static_only": {"const": true}}, "additionalProperties": {"type": ["string", "integer", "boolean", "null"]}},
+    "artifact": {"$ref": "#/$defs/artifact"},
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+    "inferences": {"type": "array", "items": {"$ref": "#/$defs/inference"}},
+    "disagreements": {"type": "array", "items": {"$ref": "#/$defs/disagreement"}},
+    "limitations": {"type": "array", "items": {"$ref": "#/$defs/limitation"}},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
+    "errors": {"type": "array", "items": {"$ref": "#/$defs/issue"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "text": {"type": "string", "minLength": 1, "pattern": "^[^\\x00-\\x1f]+$"},
+    "level": {"enum": ["high", "medium", "low", "unknown"]},
+    "ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "range": {"type": ["array", "null"], "prefixItems": [{"type": "integer", "minimum": 0}, {"type": "integer", "minimum": 1}], "minItems": 2, "maxItems": 2},
+    "location": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file_offset", "rva", "va", "header_field", "byte_range", "instruction_range"],
+      "properties": {
+        "file_offset": {"type": ["integer", "null"], "minimum": 0},
+        "rva": {"type": ["integer", "null"], "minimum": 0},
+        "va": {"type": ["integer", "null"], "minimum": 0},
+        "header_field": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "null"}]},
+        "byte_range": {"$ref": "#/$defs/range"},
+        "instruction_range": {"$ref": "#/$defs/range"}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sha256", "size", "format", "origin"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "sha256": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 0}, "format": {"$ref": "#/$defs/text"},
+        "origin": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "null"}]}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "artifact_id", "source", "method", "verification_status", "location"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "artifact_id": {"$ref": "#/$defs/id"},
+        "source": {"$ref": "#/$defs/text"}, "method": {"$ref": "#/$defs/text"},
+        "verification_status": {"enum": ["verified", "pending", "unresolved"]},
+        "location": {"$ref": "#/$defs/location"}
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "description", "evidence_ids", "observation_confidence"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "description": {"$ref": "#/$defs/text"},
+        "evidence_ids": {"$ref": "#/$defs/ids", "minItems": 1},
+        "observation_confidence": {"$ref": "#/$defs/level"}
+      }
+    },
+    "inference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "description", "observation_ids", "inference_strength", "alternative_explanations", "limitations"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "description": {"$ref": "#/$defs/text"},
+        "observation_ids": {"$ref": "#/$defs/ids", "minItems": 1},
+        "inference_strength": {"$ref": "#/$defs/level"},
+        "alternative_explanations": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "limitations": {"type": "array", "items": {"$ref": "#/$defs/text"}}
+      }
+    },
+    "disagreement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "category", "description", "parser_names", "evidence_ids"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "category": {"enum": ["equivalent", "semantic_difference", "unsupported", "malformed_input", "suspected_parser_defect"]},
+        "description": {"$ref": "#/$defs/text"},
+        "parser_names": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+        "evidence_ids": {"$ref": "#/$defs/ids"}
+      }
+    },
+    "limitation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "code", "description", "subject_id"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "code": {"$ref": "#/$defs/id"},
+        "description": {"$ref": "#/$defs/text"},
+        "subject_id": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]}
+      }
+    },
+    "issue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {"code": {"$ref": "#/$defs/id"}, "message": {"$ref": "#/$defs/text"}}
+    }
+  }
+}
